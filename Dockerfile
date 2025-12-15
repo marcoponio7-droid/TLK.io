@@ -1,24 +1,9 @@
 # Utiliser une image Node.js standard
-FROM node:lts-slim
+FROM mcr.microsoft.com/playwright/node:lts
 
 # Installer les dépendances système nécessaires à Playwright (Chromium)
 # Cette étape est cruciale pour le mode headless
-RUN apt-get update && apt-get install -y \
-    libnss3 \
-    libatk-bridge2.0-0 \
-    libxkbcommon-x11-0 \
-    libxcomposite1 \
-    libxrandr2 \
-    libxtst6 \
-    libxdamage1 \
-    libxfixes3 \
-    libxext6 \
-    libxi6 \
-    libgbm-dev \
-    libasound2 \
-    libxshmfence-dev \
-    --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+# Dépendances système gérées par l'image de base Playwright
 
 # Définir le répertoire de travail
 WORKDIR /usr/src/app
@@ -32,7 +17,7 @@ COPY src ./src
 RUN npm install
 
 # Installer les navigateurs Playwright (Chromium)
-RUN npx playwright install chromium
+# Navigateurs Playwright gérés par l'image de base
 
 # Compiler le code TypeScript
 RUN npx tsc
