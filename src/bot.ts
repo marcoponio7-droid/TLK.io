@@ -1,6 +1,7 @@
 // src/bot.ts
 
-import { chromium, Browser, BrowserContext, Page } from 'playwright';\nimport express from 'express';
+import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import express from 'express';
 import * as fs from 'fs/promises';
 import { COOKIE_PATH, TLK_URL, SELECTORS, BLOCKED_USERS, MEDIA_REGEX, RULES_MESSAGE, RULES_INTERVAL_MS } from './config';
 
