@@ -1,5 +1,5 @@
 # Utiliser une image Node.js standard
-FROM mcr.microsoft.com/playwright:v1.42.1-jammy
+FROM mcr.microsoft.com/playwright:v1.57.0-jammy
 
 # Installer les dépendances système nécessaires à Playwright (Chromium)
 # Cette étape est cruciale pour le mode headless
