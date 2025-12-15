@@ -171,9 +171,11 @@ async function checkAndDelete(postElement: any): Promise<void> {
 
         // 3. Vérification par contenu média (liens directs ou markdown)
         // On cherche les liens directs (y compris le markdown ![](url))
-        const links = message.match(/(https?:\/\/[^\s]+)/g) || [];
+        const linkRegex = /(https?:\/\/[^\s]+)/g;
+        let match;
         
-        for (const link of links) {
+        while ((match = linkRegex.exec(message)) !== null) {
+            const link = match[0];
             if (MEDIA_REGEX.test(link)) {
                 shouldDelete = true;
                 reason = reason || `Lien média direct détecté: ${link}`;
