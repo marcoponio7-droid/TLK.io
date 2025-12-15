@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     libxcomposite1 \
     libxrandr2 \
     libxtst6 \
+    libxdamage1 \
     libgbm-dev \
     libasound2 \
     libxshmfence-dev \
