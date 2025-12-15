@@ -2,6 +2,6 @@ node_modules
 dist
 .git
 .gitignore
-session-cookies.json
+# session-cookies.json (Retiré pour le déploiement)
 # Fichiers de cache Playwright
 .cache
