@@ -10,7 +10,8 @@ WORKDIR /usr/src/app
 
 # Copier les fichiers de l'application
 COPY package*.json ./
-COPY tsconfig.json ./\nCOPY session-cookies.json ./
+COPY tsconfig.json ./
+COPY session-cookies.json ./
 COPY src ./src
 
 # Installer les dépendances Node.js (Playwright sera installé ici)
