@@ -1,0 +1,10 @@
+services:
+- type: web
+  name: tlk-mod-bot
+  env: docker
+  dockerfilePath: Dockerfile
+  plan: starter
+  autoDeploy: true
+  # Le port est géré par le code Express dans bot.ts
+  # port: 3000 
+  # Le code Express dans bot.ts gère déjà le port via process.env.PORT
