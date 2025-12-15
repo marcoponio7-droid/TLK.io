@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y \
     libnss3 \
     libatk-bridge2.0-0 \
     libxkbcommon-x11-0 \
+    libxcomposite1 \
+    libxrandr2 \
+    libxtst6 \
     libgbm-dev \
     libasound2 \
     libxshmfence-dev \
