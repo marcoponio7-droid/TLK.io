@@ -1,5 +1,5 @@
 # Utiliser une image Node.js avec les dépendances Playwright
-FROM mcr.microsoft.com/playwright/node:lts
+FROM mcr.microsoft.com/playwright/node:lts-jammy
 
 # Définir le répertoire de travail
 WORKDIR /usr/src/app
