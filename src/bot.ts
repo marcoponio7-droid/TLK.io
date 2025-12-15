@@ -1,6 +1,6 @@
 // src/bot.ts
 
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import { chromium, Browser, BrowserContext, Page } from 'playwright';\nimport express from 'express';
 import * as fs from 'fs/promises';
 import { COOKIE_PATH, TLK_URL, SELECTORS, BLOCKED_USERS, MEDIA_REGEX, RULES_MESSAGE, RULES_INTERVAL_MS } from './config';
 
@@ -76,8 +76,9 @@ async function startBot() {
     console.log("[INFO] Attente du chargement complet de la page...");
     await page.waitForTimeout(5000); // Attendre 5 secondes pour le chargement du chat
 
-    // 4. Démarrage de la surveillance et du timer
-    console.log("[SUCCÈS] Démarrage de la surveillance et du timer...");
+    // 4. Démarrage du serveur Keep-Alive, de la surveillance et du timer
+    console.log("[SUCCÈS] Démarrage du serveur Keep-Alive, de la surveillance et du timer...");
+    startKeepAliveServer();
     await startMonitoring(page);
     startRulesTimer(page);
 
@@ -236,6 +237,22 @@ async function startMonitoring(page: Page): Promise<void> {
         // Attendre un court instant avant de vérifier à nouveau (sondage)
         await page.waitForTimeout(500); // Vérification toutes les 500ms
     }
+}
+
+/**
+ * Démarre un mini-serveur HTTP pour maintenir le service Render actif.
+ */
+function startKeepAliveServer(): void {
+    const app = express();
+    const port = process.env.PORT || 3000;
+
+    app.get('/', (req, res) => {
+        res.status(200).send('tlk.io Mod Bot is running and active.');
+    });
+
+    app.listen(port, () => {
+        console.log(`[INFO] Keep-Alive Server started on port ${port}`);
+    });
 }
 
 // Export de la fonction pour la rendre testable et exécutable
