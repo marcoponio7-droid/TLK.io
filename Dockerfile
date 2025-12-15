@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     libxtst6 \
     libxdamage1 \
+    libxfixes3 \
+    libxext6 \
+    libxi6 \
     libgbm-dev \
     libasound2 \
     libxshmfence-dev \
