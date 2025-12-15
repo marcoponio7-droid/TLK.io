@@ -1,0 +1,61 @@
+[
+    {
+        "name": "_tlkio_session",
+        "value": "NllDM2NBbnhsNjNpQ1M5MzVlZXI2cnZrZDhaNGNVV2hVZHJCV21tQUxuaFRJQTlVcEJEeXRueXo3R0V2eTZ5Uk1CSytFYk01RHlnSTJaRGdybG1KZERPSDFFTW5kNVJhZEhybFgxSTdWd3VIS0xmUDhvTEZUYjFFNTQwRmIwS2VEaDMzdjdRejJnL05FNmRhUnNkTWZWNmkyaVBtQlF1RzhhZWVaWE1RQ1QyajRPenBsa2cyQXoxVzFVQzBUdjZMYytSUmRUc25qd2ZINmNOcmt0R2dXdEQ4aDNlZzhZZzN0M1hQdnZHa0ZQdHlhczJhOHBQbzZXSUFrZlZCbE8zNW1TcTcxUGJtUEI1TjN2b3l1Y0dRTDhEY0pkUGh5L0EwMkZ2ZkdnYk9kWmxCZlh3QU1ZQUI2UGZBSmlVb0pQU2NMc0hjbVJqY05ranlkL2dQdCt5UFJwbkw1UE15NWRycFA3MTBQek1GS0ljSEhWbGpRRHl6eGNUdC8xc3NOQTJxNTNuVUIwYTN2dm5Ua2h3NFFoQnM0akhPWG5xdFczMjJMczJ6eHRoVElPajdWVkF2STBlaTRyNS9tWmpvcC92cS0tUkJ0cFpjaUJvcXZGWkoyR0RBZTEzUT09--4e9f7cc4710c6d1acea81540d3418641712b5e05",
+        "domain": ".tlk.io",
+        "hostOnly": false,
+        "path": "/",
+        "secure": true,
+        "httpOnly": true,
+        "sameSite": "None",
+        "session": false,
+        "expirationDate": 1781560669.11
+    },
+    {
+        "name": "_ga_2ZD8RQ47RB",
+        "value": "GS2.1.s1765819372$o1$g1$t1765835869$j60$l0$h0",
+        "domain": ".tlk.io",
+        "hostOnly": false,
+        "path": "/",
+        "secure": false,
+        "httpOnly": false,
+        "sameSite": "Lax",
+        "session": false,
+        "expirationDate": 1800395869.041
+    },
+    {
+        "name": "_ga",
+        "value": "GA1.1.486919866.1765819373",
+        "domain": ".tlk.io",
+        "hostOnly": false,
+        "path": "/",
+        "secure": false,
+        "httpOnly": false,
+        "sameSite": "Lax",
+        "session": false,
+        "expirationDate": 1800395869.013
+    },
+    {
+        "name": "ban_list",
+        "value": "",
+        "domain": "tlk.io",
+        "hostOnly": true,
+        "path": "/grenadine",
+        "secure": false,
+        "httpOnly": false,
+        "sameSite": "Lax",
+        "session": false,
+        "expirationDate": 1766430605
+    },
+    {
+        "name": "inactive_since",
+        "value": "1765835982",
+        "domain": "tlk.io",
+        "hostOnly": true,
+        "path": "/grenadine",
+        "secure": false,
+        "httpOnly": false,
+        "sameSite": "Lax",
+        "session": true
+    }
+]

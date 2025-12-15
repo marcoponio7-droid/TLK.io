@@ -1,0 +1,7 @@
+node_modules
+dist
+.git
+.gitignore
+session-cookies.json
+# Fichiers de cache Playwright
+.cache
