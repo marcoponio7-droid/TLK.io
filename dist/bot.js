@@ -325,7 +325,13 @@ async function startMonitoring(page) {
                 const latestPost = allPosts[allPosts.length - 1];
                 const currentMessageId = await latestPost.getAttribute('id');
                 if (currentMessageId && currentMessageId !== lastMessageId) {
-                    console.log(`[DEBUG] Nouveau message détecté: ${currentMessageId}`);
+                    // Extraire le pseudo pour le log
+                    try {
+                        const pseudoEl = latestPost.locator(config_1.SELECTORS.POST_NAME);
+                        const pseudo = await pseudoEl.innerText();
+                        console.log(`[DEBUG] Nouveau message de [${pseudo.trim()}] - ID: ${currentMessageId}`);
+                    }
+                    catch (e) { }
                     await checkAndDelete(latestPost);
                     lastMessageId = currentMessageId;
                 }
