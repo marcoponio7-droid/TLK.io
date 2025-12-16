@@ -1,11 +1,7 @@
 // src/config.ts
 
-// Liste des pseudos interdits.
-export const BLOCKED_USERS: string[] = [
-  "pp",
-  "userTest",
-  "pseudoInterdit"
-];
+// Clé d'administration pour l'interface web (à définir dans les variables d'environnement Render)
+export const ADMIN_KEY: string = process.env.ADMIN_KEY || "default_admin_key";
 
 // Regex pour détecter les liens directs vers les fichiers médias.
 // Inclut les extensions demandées : .jpg .jpeg .png .gif .webp .svg .tiff .pdf .ai .eps .psd .mp4
