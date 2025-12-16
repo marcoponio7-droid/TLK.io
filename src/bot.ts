@@ -162,30 +162,33 @@ function startRulesTimer(page: Page): void {
 }
 
 /**
- * Supprime un message en utilisant le 2ème bouton (comme Tampermonkey).
+ * Supprime un message en utilisant JavaScript directement (comme Tampermonkey).
  */
 async function deleteMessage(postElement: Locator): Promise<void> {
     try {
-        // Simuler mouseenter pour faire apparaître les boutons
-        await postElement.dispatchEvent('mouseenter');
-        await page.waitForTimeout(150);
+        // Utiliser evaluate pour exécuter le code comme Tampermonkey le fait
+        const deleted = await postElement.evaluate((post: Element) => {
+            // Simuler mouseenter
+            post.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+            
+            // Récupérer tous les boutons
+            const buttons = post.querySelectorAll("button");
+            if (buttons.length >= 2) {
+                // Cliquer sur le 2ème bouton (index 1)
+                (buttons[1] as HTMLButtonElement).click();
+                return true;
+            } else if (buttons.length === 1) {
+                // Si un seul bouton, essayer de cliquer dessus
+                (buttons[0] as HTMLButtonElement).click();
+                return true;
+            }
+            return false;
+        });
 
-        // Récupérer tous les boutons et cliquer sur le 2ème (index 1)
-        const buttons = postElement.locator('button');
-        const buttonCount = await buttons.count();
-        
-        if (buttonCount >= 2) {
-            await buttons.nth(1).click();
+        if (deleted) {
             console.log("[SUPPRESSION] Message supprimé avec succès.");
         } else {
-            // Alternative: essayer le bouton delete-message
-            const deleteBtn = postElement.locator('button#delete-message');
-            if (await deleteBtn.count() > 0) {
-                await deleteBtn.click();
-                console.log("[SUPPRESSION] Message supprimé (via #delete-message).");
-            } else {
-                console.log(`[AVERTISSEMENT] Bouton de suppression non trouvé. ${buttonCount} boutons disponibles.`);
-            }
+            console.log("[AVERTISSEMENT] Aucun bouton de suppression trouvé.");
         }
     } catch (error) {
         console.error("[ERREUR] Échec de la suppression du message:", error);
