@@ -186,7 +186,7 @@ async function checkAndDelete(postElement: any): Promise<void> {
         let reason = "";
 
         // 1. Vérification par pseudo
-        if (blockedUsers.includes(pseudo.trim())) {
+        if (blockedUsers.map(u => u.toLowerCase()).includes(pseudo.trim().toLowerCase())) {
             shouldDelete = true;
             reason = `Pseudo interdit: ${pseudo.trim()}`;
         }
