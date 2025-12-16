@@ -229,9 +229,20 @@ async function deleteMessage(postElement) {
     try {
         // 1. Simuler le survol pour faire apparaître le bouton
         await postElement.hover();
-        // 2. Cliquer sur le bouton de suppression (le deuxième bouton est le bouton "Delete" pour les modérateurs)
-        const deleteButton = postElement.locator('button:nth-child(2)');
-        await deleteButton.click({ timeout: 5000 }); // Temps d'attente court pour le clic
+        await page.waitForTimeout(300);
+        // 2. Essayer plusieurs sélecteurs pour le bouton de suppression
+        let deleteButton = postElement.locator(config_1.SELECTORS.DELETE_BUTTON);
+        let buttonCount = await deleteButton.count();
+        if (buttonCount === 0) {
+            // Alternative: chercher le bouton danger (rouge) de suppression
+            deleteButton = postElement.locator('.button--danger, button[title*="delete"], button[title*="suppr"]');
+            buttonCount = await deleteButton.count();
+        }
+        if (buttonCount === 0) {
+            // Dernière alternative: 2ème bouton
+            deleteButton = postElement.locator('button:nth-child(2)');
+        }
+        await deleteButton.first().click({ timeout: 5000 });
         console.log("[SUPPRESSION] Message supprimé avec succès.");
     }
     catch (error) {
