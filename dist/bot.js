@@ -175,7 +175,7 @@ async function startBot() {
     console.log(`[DEBUG] URL actuelle: ${page.url()}`);
     console.log(`[DEBUG] Titre de la page: ${await page.title()}`);
     // Vérifier si on voit le champ de message (signe qu'on est connecté)
-    const isLoaded = await page.locator('#message-input').count();
+    const isLoaded = await page.locator(config_1.SELECTORS.CHAT_LOADED).count();
     console.log(`[DEBUG] Champ de message trouvé: ${isLoaded > 0 ? 'OUI' : 'NON'}`);
     // Prendre une capture d'écran pour debug
     await page.screenshot({ path: 'debug-screenshot.png' });

@@ -27,10 +27,10 @@ exports.SELECTORS = {
     POST_CONTENT: '.post-message',
     // Sélecteur pour le bouton de suppression (TRÈS IMPORTANT)
     DELETE_BUTTON: 'button#delete-message.post-time-button',
-    // Sélecteur pour le champ de saisie de message
-    INPUT_FIELD: '#message-input',
-    // Sélecteur pour le bouton d'envoi
-    SEND_BUTTON: '#send-button',
+    // Sélecteur pour le champ de saisie de message (classe, pas ID)
+    INPUT_FIELD: '.message-input',
+    // Sélecteur pour le bouton d'envoi (à vérifier)
+    SEND_BUTTON: '.button',
     // Sélecteur pour détecter si le chat est chargé (ex: le champ d'entrée)
-    CHAT_LOADED: '#message-input'
+    CHAT_LOADED: '.message-input'
 };
