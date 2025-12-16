@@ -2,7 +2,7 @@
 
 import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import * as path from 'path';
-import * as express from 'express';
+import express from 'express';
 import * as fs from 'fs/promises';
 import { COOKIE_PATH, TLK_URL, SELECTORS, MEDIA_REGEX, RULES_MESSAGE, RULES_INTERVAL_MS, ADMIN_KEY } from './config';
 
