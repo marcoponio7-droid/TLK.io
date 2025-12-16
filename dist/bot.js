@@ -106,21 +106,33 @@ async function loadCookies(context) {
     try {
         const cookiesJson = await fs.readFile(config_1.COOKIE_PATH, 'utf-8');
         const rawCookies = JSON.parse(cookiesJson);
-        const cookies = rawCookies.map((c) => ({
-            name: c.name,
-            value: c.value,
-            domain: c.domain,
-            path: c.path || '/',
-            expires: c.expirationDate ? Math.floor(c.expirationDate) : undefined,
-            httpOnly: c.httpOnly || false,
-            secure: c.secure || false,
-            sameSite: c.sameSite === 'None' ? 'None' : c.sameSite === 'Strict' ? 'Strict' : 'Lax'
-        }));
+        const cookies = rawCookies.map((c) => {
+            // Convertir sameSite de Firefox vers Playwright
+            let sameSite = 'Lax';
+            if (c.sameSite === 'no_restriction' || c.sameSite === 'None') {
+                sameSite = 'None';
+            }
+            else if (c.sameSite === 'Strict' || c.sameSite === 'strict') {
+                sameSite = 'Strict';
+            }
+            return {
+                name: c.name,
+                value: c.value,
+                domain: c.domain,
+                path: c.path || '/',
+                expires: c.expirationDate ? Math.floor(c.expirationDate) : -1,
+                httpOnly: c.httpOnly || false,
+                secure: c.secure || false,
+                sameSite: sameSite
+            };
+        });
+        console.log(`[DEBUG] Cookies à charger: ${cookies.length}`);
         await context.addCookies(cookies);
         console.log(`[INFO] Cookies chargés depuis ${config_1.COOKIE_PATH}`);
     }
     catch (error) {
         console.log("[INFO] Pas de cookies existants ou erreur de chargement. Démarrage d'une nouvelle session.");
+        console.error(error);
     }
 }
 /**
@@ -159,6 +171,18 @@ async function startBot() {
     // 3. On suppose que la session est valide et on attend le chargement complet
     console.log("[INFO] Attente du chargement complet de la page...");
     await page.waitForTimeout(5000); // Attendre 5 secondes pour le chargement du chat
+    // Debug: afficher l'URL actuelle et le titre de la page
+    console.log(`[DEBUG] URL actuelle: ${page.url()}`);
+    console.log(`[DEBUG] Titre de la page: ${await page.title()}`);
+    // Vérifier si on voit le champ de message (signe qu'on est connecté)
+    const isLoaded = await page.locator('#message-input').count();
+    console.log(`[DEBUG] Champ de message trouvé: ${isLoaded > 0 ? 'OUI' : 'NON'}`);
+    // Prendre une capture d'écran pour debug
+    await page.screenshot({ path: 'debug-screenshot.png' });
+    console.log(`[DEBUG] Capture d'écran sauvegardée: debug-screenshot.png`);
+    // Afficher le HTML principal pour voir ce que le bot voit
+    const bodyText = await page.locator('body').innerText();
+    console.log(`[DEBUG] Contenu page (premiers 500 chars): ${bodyText.substring(0, 500)}`);
     // 4. Démarrage du serveur Keep-Alive, de la surveillance et du timer
     await loadBlockedUsers(); // Charger la liste des pseudos bloqués
     console.log("[SUCCÈS] Démarrage du serveur Keep-Alive, de la surveillance et du timer...");
@@ -275,15 +299,22 @@ async function startMonitoring(page) {
     // Playwright n'a pas d'API native pour MutationObserver, on doit donc sonder ou utiliser une approche plus complexe.
     // Pour la simplicité et la robustesse sur Render, on va sonder le dernier message.
     let lastMessageId = null;
+    let loopCount = 0;
     while (true) {
         try {
             // Récupérer tous les messages
             const allPosts = await page.locator(config_1.SELECTORS.POST_MESSAGE).all();
+            // Log périodique pour debug (toutes les 60 itérations = ~30 secondes)
+            loopCount++;
+            if (loopCount % 60 === 0) {
+                console.log(`[DEBUG] Surveillance active - ${allPosts.length} messages détectés`);
+            }
             if (allPosts.length > 0) {
                 // On ne vérifie que le dernier message pour éviter de re-traiter tout l'historique
                 const latestPost = allPosts[allPosts.length - 1];
                 const currentMessageId = await latestPost.getAttribute('id');
                 if (currentMessageId && currentMessageId !== lastMessageId) {
+                    console.log(`[DEBUG] Nouveau message détecté: ${currentMessageId}`);
                     await checkAndDelete(latestPost);
                     lastMessageId = currentMessageId;
                 }
