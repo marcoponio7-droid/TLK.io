@@ -196,50 +196,53 @@ function startRulesTimer(page) {
     console.log(`[INFO] Timer des règles démarré. Envoi toutes les ${config_1.RULES_INTERVAL_MS / 1000 / 60} minutes.`);
 }
 /**
- * Supprime un message en utilisant JavaScript directement (comme Tampermonkey).
+ * Supprime un message (comme le script Tampermonkey pour les médias).
  */
 async function deleteMessage(postElement) {
     try {
-        // Utiliser evaluate pour exécuter le code comme Tampermonkey le fait
-        const deleted = await postElement.evaluate((post) => {
-            // Simuler mouseenter
-            post.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
-            // Récupérer tous les boutons
-            const buttons = post.querySelectorAll("button");
-            if (buttons.length >= 2) {
-                // Cliquer sur le 2ème bouton (index 1)
-                buttons[1].click();
-                return true;
-            }
-            else if (buttons.length === 1) {
-                // Si un seul bouton, essayer de cliquer dessus
-                buttons[0].click();
-                return true;
-            }
-            return false;
-        });
-        if (deleted) {
-            console.log("[SUPPRESSION] Message supprimé avec succès.");
+        // 1. Trouver le dernier message non-supprimé (dd.post-message sans la classe "deleted")
+        const hoverZone = postElement.locator('dd.post-message:not(.deleted)').last();
+        if (await hoverZone.count() === 0) {
+            // Tous les messages de ce post sont déjà supprimés
+            return;
         }
-        else {
-            console.log("[AVERTISSEMENT] Aucun bouton de suppression trouvé.");
+        // 2. Hover sur la zone pour faire apparaître les boutons
+        await hoverZone.hover();
+        await page.waitForTimeout(150);
+        // 3. Chercher le bouton delete spécifiquement
+        const deleteBtn = postElement.locator('button#delete-message.post-time-button');
+        if (await deleteBtn.count() > 0) {
+            await deleteBtn.click({ force: true });
+            console.log("[SUPPRESSION] Message supprimé avec succès.");
+            return;
+        }
+        // 4. Alternative: chercher tous les boutons et prendre le 2ème
+        const buttons = postElement.locator('button');
+        const count = await buttons.count();
+        if (count >= 2) {
+            await buttons.nth(1).click({ force: true });
+            console.log("[SUPPRESSION] Message supprimé (2ème bouton).");
+            return;
         }
     }
     catch (error) {
-        console.error("[ERREUR] Échec de la suppression du message:", error);
+        // Ignorer silencieusement les erreurs (post déjà supprimé ou disparu)
     }
 }
 /**
  * Vérifie si un post contient un média (comme le script Tampermonkey).
+ * Ne vérifie que les messages non-supprimés.
  */
 async function postHasMedia(postElement) {
     try {
+        // Chercher uniquement dans les messages non-supprimés
+        const activeMessages = postElement.locator('dd.post-message:not(.deleted)');
         // Vérifier les balises img, video, svg
-        const mediaCount = await postElement.locator('img, video, svg').count();
+        const mediaCount = await activeMessages.locator('img, video, svg').count();
         if (mediaCount > 0)
             return true;
         // Vérifier les liens vers des fichiers médias
-        const links = await postElement.locator('a[href]').all();
+        const links = await activeMessages.locator('a[href]').all();
         for (const link of links) {
             const href = await link.getAttribute('href');
             if (href && config_1.MEDIA_REGEX.test(href)) {
@@ -293,47 +296,62 @@ async function checkAndDelete(postElement) {
     }
 }
 /**
- * Démarre la surveillance des nouveaux messages (comme Tampermonkey).
+ * Démarre la surveillance des messages (exactement comme Tampermonkey).
  */
 async function startMonitoring(page) {
     await page.waitForSelector(config_1.SELECTORS.POST_CONTAINER, { state: 'attached', timeout: 30000 });
     console.log("[INFO] Surveillance démarrée - Utilisation du sélecteur dl.post");
-    const processedIds = new Set();
     let loopCount = 0;
+    const recentlyDeleted = new Map(); // timestamp -> Date.now()
+    const COOLDOWN_MS = 5000; // 5 secondes de cooldown après suppression
     while (true) {
         try {
-            // Récupérer tous les posts (dl.post)
             const allPosts = await page.locator(config_1.SELECTORS.POST_CONTAINER).all();
             loopCount++;
-            if (loopCount % 60 === 0) {
-                console.log(`[DEBUG] Surveillance active - ${allPosts.length} posts détectés`);
+            if (loopCount % 100 === 0) {
+                console.log(`[DEBUG] Surveillance active - ${allPosts.length} posts`);
+                // Nettoyer les anciennes entrées du cooldown
+                const now = Date.now();
+                for (const [key, time] of recentlyDeleted.entries()) {
+                    if (now - time > COOLDOWN_MS * 2)
+                        recentlyDeleted.delete(key);
+                }
             }
-            // Scanner tous les posts (comme le fait Tampermonkey avec setInterval)
             for (const post of allPosts) {
                 try {
-                    // Essayer d'obtenir un identifiant unique pour ce post
+                    // Obtenir un identifiant unique pour ce post basé sur le timestamp
                     const postId = await post.evaluate((el) => {
-                        // Utiliser l'index dans le DOM ou créer un hash du contenu
-                        const text = el.textContent || '';
-                        return `${el.className}_${text.slice(0, 50)}`;
+                        const dd = el.querySelector('dd.post-message:not(.deleted)');
+                        return dd?.getAttribute('data-timestamp') || '';
                     });
-                    // Vérifier si on a déjà traité ce post
-                    if (!processedIds.has(postId)) {
-                        await checkAndDelete(post);
-                        processedIds.add(postId);
-                        // Limiter la taille du set pour éviter les fuites mémoire
-                        if (processedIds.size > 500) {
-                            const iterator = processedIds.values();
-                            for (let i = 0; i < 100; i++) {
-                                const value = iterator.next().value;
-                                if (value)
-                                    processedIds.delete(value);
-                            }
-                        }
+                    if (!postId)
+                        continue; // Pas de message actif
+                    // Vérifier le cooldown
+                    const lastDeleted = recentlyDeleted.get(postId);
+                    if (lastDeleted && Date.now() - lastDeleted < COOLDOWN_MS)
+                        continue;
+                    // Vérifier utilisateur bloqué
+                    const { blocked, username } = await isBlockedUser(post);
+                    if (blocked) {
+                        console.log(`[ALERTE] Suppression - Pseudo bloqué: ${username}`);
+                        await deleteMessage(post);
+                        recentlyDeleted.set(postId, Date.now());
+                        await page.waitForTimeout(200);
+                        continue;
+                    }
+                    // Vérifier média
+                    if (await postHasMedia(post)) {
+                        const nameEl = post.locator(config_1.SELECTORS.POST_NAME);
+                        const name = await nameEl.count() > 0 ? await nameEl.innerText() : 'inconnu';
+                        console.log(`[ALERTE] Suppression - Média détecté de: ${name.trim()}`);
+                        await deleteMessage(post);
+                        recentlyDeleted.set(postId, Date.now());
+                        await page.waitForTimeout(200);
+                        continue;
                     }
                 }
                 catch (e) {
-                    // Ignorer les erreurs individuelles
+                    // Post supprimé ou erreur, continuer
                 }
             }
         }
@@ -347,7 +365,6 @@ async function startMonitoring(page) {
                 console.error("[ERREUR] Échec du rechargement:", reloadError);
             }
         }
-        // Vérification toutes les 300ms (comme Tampermonkey)
         await page.waitForTimeout(300);
     }
 }
