@@ -159,8 +159,8 @@ async function deleteMessage(postElement: any): Promise<void> {
         // 1. Simuler le survol pour faire apparaître le bouton
         await postElement.hover();
 
-        // 2. Cliquer sur le bouton de suppression
-        const deleteButton = postElement.locator(SELECTORS.DELETE_BUTTON);
+        // 2. Cliquer sur le bouton de suppression (le deuxième bouton est le bouton "Delete" pour les modérateurs)
+        const deleteButton = postElement.locator('button:nth-child(2)');
         await deleteButton.click({ timeout: 5000 }); // Temps d'attente court pour le clic
 
         console.log("[SUPPRESSION] Message supprimé avec succès.");
