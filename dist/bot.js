@@ -196,11 +196,11 @@ function startRulesTimer(page) {
     console.log(`[INFO] Timer des règles démarré. Envoi toutes les ${config_1.RULES_INTERVAL_MS / 1000 / 60} minutes.`);
 }
 /**
- * Supprime un message (exactement comme le script Tampermonkey).
+ * Supprime un post avec média (méthode du script Tampermonkey pour médias).
+ * Hover sur dd.post-message puis clic sur button#delete-message
  */
-async function deleteMessage(postElement) {
+async function deleteMediaPost(postElement) {
     try {
-        // Utiliser evaluate pour exécuter le code exactement comme Tampermonkey
         await postElement.evaluate((post) => {
             function hover(el) {
                 el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
@@ -222,12 +222,33 @@ async function deleteMessage(postElement) {
                 }
             }, 120);
         });
-        // Attendre que la suppression soit effectuée
         await page.waitForTimeout(200);
-        console.log("[SUPPRESSION] Message supprimé avec succès.");
+        console.log("[SUPPRESSION] Média supprimé avec succès.");
     }
     catch (error) {
-        // Ignorer silencieusement les erreurs (post déjà supprimé ou disparu)
+        // Ignorer silencieusement les erreurs
+    }
+}
+/**
+ * Supprime un post d'utilisateur banni (méthode du script Tampermonkey pour users).
+ * mouseenter sur le post puis clic sur le 2ème bouton
+ */
+async function deleteBlockedUserPost(postElement) {
+    try {
+        await postElement.evaluate((post) => {
+            // Forcer l'apparition des boutons
+            post.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+            // Cherche le bouton Delete = 2e bouton
+            const buttons = post.querySelectorAll("button");
+            if (buttons.length >= 2) {
+                buttons[1].click();
+            }
+        });
+        await page.waitForTimeout(200);
+        console.log("[SUPPRESSION] Message utilisateur banni supprimé.");
+    }
+    catch (error) {
+        // Ignorer silencieusement les erreurs
     }
 }
 /**
@@ -282,13 +303,13 @@ async function checkAndDelete(postElement) {
         const { blocked, username } = await isBlockedUser(postElement);
         if (blocked) {
             console.log(`[ALERTE] Suppression - Pseudo bloqué: ${username}`);
-            await deleteMessage(postElement);
+            await deleteBlockedUserPost(postElement);
             return;
         }
         // Vérifier si le post contient un média
         if (await postHasMedia(postElement)) {
             console.log(`[ALERTE] Suppression - Média détecté de: ${username || 'inconnu'}`);
-            await deleteMessage(postElement);
+            await deleteMediaPost(postElement);
             return;
         }
     }
@@ -335,7 +356,7 @@ async function startMonitoring(page) {
                     const { blocked, username } = await isBlockedUser(post);
                     if (blocked) {
                         console.log(`[ALERTE] Suppression - Pseudo bloqué: ${username}`);
-                        await deleteMessage(post);
+                        await deleteBlockedUserPost(post);
                         recentlyDeleted.set(postId, Date.now());
                         await page.waitForTimeout(200);
                         continue;
@@ -345,7 +366,7 @@ async function startMonitoring(page) {
                         const nameEl = post.locator(config_1.SELECTORS.POST_NAME);
                         const name = await nameEl.count() > 0 ? await nameEl.innerText() : 'inconnu';
                         console.log(`[ALERTE] Suppression - Média détecté de: ${name.trim()}`);
-                        await deleteMessage(post);
+                        await deleteMediaPost(post);
                         recentlyDeleted.set(postId, Date.now());
                         await page.waitForTimeout(200);
                         continue;
