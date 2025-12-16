@@ -105,13 +105,22 @@ async function saveCookies(context) {
 async function loadCookies(context) {
     try {
         const cookiesJson = await fs.readFile(config_1.COOKIE_PATH, 'utf-8');
-        const cookies = JSON.parse(cookiesJson);
+        const rawCookies = JSON.parse(cookiesJson);
+        const cookies = rawCookies.map((c) => ({
+            name: c.name,
+            value: c.value,
+            domain: c.domain,
+            path: c.path || '/',
+            expires: c.expirationDate ? Math.floor(c.expirationDate) : undefined,
+            httpOnly: c.httpOnly || false,
+            secure: c.secure || false,
+            sameSite: c.sameSite === 'None' ? 'None' : c.sameSite === 'Strict' ? 'Strict' : 'Lax'
+        }));
         await context.addCookies(cookies);
         console.log(`[INFO] Cookies chargés depuis ${config_1.COOKIE_PATH}`);
     }
     catch (error) {
-        // Si le fichier n'existe pas ou est invalide, on continue sans cookies.
-        console.error("[ERREUR] Échec du chargement des cookies. Démarrage d'une nouvelle session.", error);
+        console.log("[INFO] Pas de cookies existants ou erreur de chargement. Démarrage d'une nouvelle session.");
     }
 }
 /**
@@ -136,8 +145,11 @@ async function isSessionValid(page) {
  */
 async function startBot() {
     console.log("[DÉMARRAGE] Lancement du bot de modération tlk.io...");
-    // Configuration pour l'hébergement Render (mode headless)
-    exports.browser = browser = await playwright_1.chromium.launch({ headless: true });
+    // Configuration pour l'hébergement Replit (mode headless avec Chromium système)
+    exports.browser = browser = await playwright_1.chromium.launch({
+        headless: true,
+        executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
+    });
     exports.context = context = await browser.newContext();
     // 1. Chargement des cookies
     await loadCookies(context);
@@ -292,7 +304,7 @@ async function startMonitoring(page) {
  */
 function startKeepAliveServer() {
     const app = (0, express_1.default)();
-    const port = process.env.PORT || 3000;
+    const port = process.env.PORT || 5000;
     // Middleware pour le parsing JSON et URL-encoded
     app.use(express_1.default.json());
     app.use(express_1.default.urlencoded({ extended: true }));
