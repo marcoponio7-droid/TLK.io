@@ -457,12 +457,17 @@ function startKeepAliveServer() {
         res.send(html);
     });
     app.post('/admin/blocked-users/add', adminAuth, async (req, res) => {
+        console.log(`[DEBUG] POST reçu - body:`, req.body);
         const pseudo = req.body.pseudo ? req.body.pseudo.trim() : null;
+        console.log(`[DEBUG] Pseudo extrait: "${pseudo}"`);
         if (pseudo && !blockedUsers.includes(pseudo)) {
             blockedUsers.push(pseudo);
             await saveBlockedUsers();
             console.log(`[ADMIN] Pseudo ajouté: ${pseudo}`);
             console.log(`[INFO] Liste mise à jour: ${blockedUsers.join(', ')}`);
+        }
+        else {
+            console.log(`[DEBUG] Pseudo non ajouté - vide ou déjà présent`);
         }
         res.redirect(`/admin/blocked-users?key=${config_1.ADMIN_KEY}`);
     });
