@@ -2,7 +2,7 @@
 
 import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import * as path from 'path';
-import express from 'express';
+import * as express from 'express';
 import * as fs from 'fs/promises';
 import { COOKIE_PATH, TLK_URL, SELECTORS, MEDIA_REGEX, RULES_MESSAGE, RULES_INTERVAL_MS, ADMIN_KEY } from './config';
 
@@ -186,7 +186,11 @@ async function checkAndDelete(postElement: any): Promise<void> {
         let reason = "";
 
         // 1. Vérification par pseudo
-        if (blockedUsers.map(u => u.toLowerCase()).includes(pseudo.trim().toLowerCase())) {
+        const pseudoMinuscule = pseudo.trim().toLowerCase();
+        const blockedMinuscule = blockedUsers.map(u => u.toLowerCase());
+
+        // 1. Vérification par pseudo
+        if (blockedMinuscule.includes(pseudoMinuscule)) {
             shouldDelete = true;
             reason = `Pseudo interdit: ${pseudo.trim()}`;
         }
