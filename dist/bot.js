@@ -64,7 +64,7 @@ async function loadBlockedUsers() {
         const data = await fs.readFile(BLOCKED_USERS_PATH, 'utf-8');
         const json = JSON.parse(data);
         blockedUsers = json.blocked || [];
-        console.log(`[INFO] ${blockedUsers.length} pseudos bloqués chargés.`);
+        console.log(`[INFO] ${blockedUsers.length} pseudos bloqués chargés: ${blockedUsers.join(', ')}`);
     }
     catch (error) {
         console.error("[ERREUR] Échec du chargement des pseudos bloqués. Utilisation d'une liste vide.", error);
@@ -86,7 +86,6 @@ async function saveBlockedUsers() {
 }
 /**
  * Sauvegarde les cookies de session dans un fichier JSON.
- * @param context Le contexte du navigateur.
  */
 async function saveCookies(context) {
     try {
@@ -100,14 +99,12 @@ async function saveCookies(context) {
 }
 /**
  * Charge les cookies de session depuis un fichier JSON.
- * @param context Le contexte du navigateur.
  */
 async function loadCookies(context) {
     try {
         const cookiesJson = await fs.readFile(config_1.COOKIE_PATH, 'utf-8');
         const rawCookies = JSON.parse(cookiesJson);
         const cookies = rawCookies.map((c) => {
-            // Convertir sameSite de Firefox vers Playwright
             let sameSite = 'Lax';
             if (c.sameSite === 'no_restriction' || c.sameSite === 'None') {
                 sameSite = 'None';
@@ -136,19 +133,16 @@ async function loadCookies(context) {
     }
 }
 /**
- * Vérifie si la session est valide en cherchant un élément clé du chat.
- * @param page La page Playwright.
- * @returns Vrai si la session est valide (l'élément clé est présent).
+ * Vérifie si la session est valide.
  */
 async function isSessionValid(page) {
     try {
-        // On vérifie la présence du champ d'entrée de message, signe que l'utilisateur est connecté et que le chat est chargé.
         await page.waitForSelector(config_1.SELECTORS.CHAT_LOADED, { timeout: 10000 });
         console.log("[INFO] Session valide. Le champ de message est visible.");
         return true;
     }
     catch (error) {
-        console.log("[AVERTISSEMENT] Session invalide ou déconnectée. Le champ de message n'est pas visible.");
+        console.log("[AVERTISSEMENT] Session invalide ou déconnectée.");
         return false;
     }
 }
@@ -157,49 +151,30 @@ async function isSessionValid(page) {
  */
 async function startBot() {
     console.log("[DÉMARRAGE] Lancement du bot de modération tlk.io...");
-    // Configuration pour l'hébergement Replit (mode headless avec Chromium système)
     exports.browser = browser = await playwright_1.chromium.launch({
         headless: true,
         executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
     });
     exports.context = context = await browser.newContext();
-    // 1. Chargement des cookies
     await loadCookies(context);
-    // 2. Navigation vers tlk.io
     exports.page = page = await context.newPage();
     await page.goto(config_1.TLK_URL, { waitUntil: 'domcontentloaded' });
-    // 3. On suppose que la session est valide et on attend le chargement complet
     console.log("[INFO] Attente du chargement complet de la page...");
-    await page.waitForTimeout(5000); // Attendre 5 secondes pour le chargement du chat
-    // Debug: afficher l'URL actuelle et le titre de la page
+    await page.waitForTimeout(5000);
     console.log(`[DEBUG] URL actuelle: ${page.url()}`);
     console.log(`[DEBUG] Titre de la page: ${await page.title()}`);
-    // Vérifier si on voit le champ de message (signe qu'on est connecté)
     const isLoaded = await page.locator(config_1.SELECTORS.CHAT_LOADED).count();
     console.log(`[DEBUG] Champ de message trouvé: ${isLoaded > 0 ? 'OUI' : 'NON'}`);
-    // Prendre une capture d'écran pour debug
     await page.screenshot({ path: 'debug-screenshot.png' });
     console.log(`[DEBUG] Capture d'écran sauvegardée: debug-screenshot.png`);
-    // Afficher le HTML principal pour voir ce que le bot voit
-    const bodyText = await page.locator('body').innerText();
-    console.log(`[DEBUG] Contenu page (premiers 500 chars): ${bodyText.substring(0, 500)}`);
-    // 4. Démarrage du serveur Keep-Alive, de la surveillance et du timer
-    await loadBlockedUsers(); // Charger la liste des pseudos bloqués
+    await loadBlockedUsers();
     console.log("[SUCCÈS] Démarrage du serveur Keep-Alive, de la surveillance et du timer...");
     startKeepAliveServer();
     await startMonitoring(page);
     startRulesTimer(page);
-    // Pour l'instant, on laisse le bot tourner indéfiniment pour simuler le 24/7
-    // process.on('SIGINT', async () => {
-    //     console.log("[ARRÊT] Fermeture du navigateur...");
-    //     await browser.close();
-    //     process.exit(0);
-    // });
 }
-// Fonctions de modération et d'envoi de messages (Phase 3 & 4)
 /**
  * Envoie le message des règles dans le chat.
- * @param page La page Playwright.
  */
 async function sendRulesMessage(page) {
     try {
@@ -213,7 +188,6 @@ async function sendRulesMessage(page) {
 }
 /**
  * Démarre le timer pour l'envoi horaire du message des règles.
- * @param page La page Playwright.
  */
 function startRulesTimer(page) {
     setInterval(() => {
@@ -222,155 +196,175 @@ function startRulesTimer(page) {
     console.log(`[INFO] Timer des règles démarré. Envoi toutes les ${config_1.RULES_INTERVAL_MS / 1000 / 60} minutes.`);
 }
 /**
- * Simule le clic sur le bouton de suppression d'un message.
- * @param postElement Le localisateur Playwright du message (dd.post-message).
+ * Supprime un message en utilisant le 2ème bouton (comme Tampermonkey).
  */
 async function deleteMessage(postElement) {
     try {
-        // 1. Simuler le survol pour faire apparaître le bouton
-        await postElement.hover();
-        await page.waitForTimeout(300);
-        // 2. Essayer plusieurs sélecteurs pour le bouton de suppression
-        let deleteButton = postElement.locator(config_1.SELECTORS.DELETE_BUTTON);
-        let buttonCount = await deleteButton.count();
-        if (buttonCount === 0) {
-            // Alternative: chercher le bouton danger (rouge) de suppression
-            deleteButton = postElement.locator('.button--danger, button[title*="delete"], button[title*="suppr"]');
-            buttonCount = await deleteButton.count();
+        // Simuler mouseenter pour faire apparaître les boutons
+        await postElement.dispatchEvent('mouseenter');
+        await page.waitForTimeout(150);
+        // Récupérer tous les boutons et cliquer sur le 2ème (index 1)
+        const buttons = postElement.locator('button');
+        const buttonCount = await buttons.count();
+        if (buttonCount >= 2) {
+            await buttons.nth(1).click();
+            console.log("[SUPPRESSION] Message supprimé avec succès.");
         }
-        if (buttonCount === 0) {
-            // Dernière alternative: 2ème bouton
-            deleteButton = postElement.locator('button:nth-child(2)');
+        else {
+            // Alternative: essayer le bouton delete-message
+            const deleteBtn = postElement.locator('button#delete-message');
+            if (await deleteBtn.count() > 0) {
+                await deleteBtn.click();
+                console.log("[SUPPRESSION] Message supprimé (via #delete-message).");
+            }
+            else {
+                console.log(`[AVERTISSEMENT] Bouton de suppression non trouvé. ${buttonCount} boutons disponibles.`);
+            }
         }
-        await deleteButton.first().click({ timeout: 5000 });
-        console.log("[SUPPRESSION] Message supprimé avec succès.");
     }
     catch (error) {
         console.error("[ERREUR] Échec de la suppression du message:", error);
     }
 }
 /**
- * Vérifie si un message doit être supprimé.
- * @param postElement Le localisateur Playwright du message (dd.post-message).
+ * Vérifie si un post contient un média (comme le script Tampermonkey).
  */
-async function checkAndDelete(postElement) {
+async function postHasMedia(postElement) {
     try {
-        // Le pseudo est dans l'élément <dt> précédent (frère), pas dans le <dd>
-        // On utilise XPath pour aller chercher le dt précédent
-        const pseudoElement = postElement.locator('xpath=./preceding-sibling::dt[1]');
-        const messageElement = postElement;
-        const pseudo = await pseudoElement.innerText();
-        const message = await messageElement.innerText();
-        const innerHTML = await messageElement.innerHTML();
-        console.log(`[DEBUG] Vérification message - Pseudo: [${pseudo.trim()}] Message: ${message.substring(0, 50)}...`);
-        let shouldDelete = false;
-        let reason = "";
-        // 1. Vérification par pseudo
-        const pseudoMinuscule = pseudo.trim().replace(/:$/, '').toLowerCase();
-        const blockedMinuscule = blockedUsers.map(u => u.toLowerCase());
-        // 1. Vérification par pseudo
-        if (blockedMinuscule.includes(pseudoMinuscule)) {
-            shouldDelete = true;
-            reason = `Pseudo interdit: ${pseudo.trim()}`;
-        }
-        // 2. Vérification par contenu média (balises)
-        if (innerHTML.includes('<img') || innerHTML.includes('<video') || innerHTML.includes('<svg')) {
-            shouldDelete = true;
-            reason = reason || "Contient une balise média (img, video, svg)";
-        }
-        // 3. Vérification par contenu média (liens directs ou markdown)
-        // On cherche les liens directs (y compris le markdown ![](url))
-        const linkRegex = /(https?:\/\/[^\s]+)/g;
-        let match;
-        while ((match = linkRegex.exec(message)) !== null) {
-            const link = match[0];
-            if (config_1.MEDIA_REGEX.test(link)) {
-                shouldDelete = true;
-                reason = reason || `Lien média direct détecté: ${link}`;
-                break;
+        // Vérifier les balises img, video, svg
+        const mediaCount = await postElement.locator('img, video, svg').count();
+        if (mediaCount > 0)
+            return true;
+        // Vérifier les liens vers des fichiers médias
+        const links = await postElement.locator('a[href]').all();
+        for (const link of links) {
+            const href = await link.getAttribute('href');
+            if (href && config_1.MEDIA_REGEX.test(href)) {
+                return true;
             }
         }
-        if (shouldDelete) {
-            console.log(`[ALERTE] Suppression de: [${pseudo.trim()}] - Raison: ${reason}`);
-            await deleteMessage(postElement);
-        }
+        return false;
     }
     catch (error) {
-        // Ignorer les erreurs de messages qui disparaissent ou qui sont en cours de chargement
-        // console.error("[ERREUR] Échec de la vérification du message:", error);
+        return false;
     }
 }
 /**
- * Démarre la surveillance des nouveaux messages.
- * @param page La page Playwright.
+ * Vérifie si un post est d'un utilisateur bloqué (correspondance exacte comme Tampermonkey).
+ */
+async function isBlockedUser(postElement) {
+    try {
+        const nameEl = postElement.locator(config_1.SELECTORS.POST_NAME);
+        if (await nameEl.count() === 0) {
+            return { blocked: false, username: '' };
+        }
+        const username = (await nameEl.innerText()).trim();
+        const blocked = blockedUsers.includes(username);
+        return { blocked, username };
+    }
+    catch (error) {
+        return { blocked: false, username: '' };
+    }
+}
+/**
+ * Vérifie et supprime un post si nécessaire.
+ */
+async function checkAndDelete(postElement) {
+    try {
+        // Vérifier si c'est un utilisateur bloqué
+        const { blocked, username } = await isBlockedUser(postElement);
+        if (blocked) {
+            console.log(`[ALERTE] Suppression - Pseudo bloqué: ${username}`);
+            await deleteMessage(postElement);
+            return;
+        }
+        // Vérifier si le post contient un média
+        if (await postHasMedia(postElement)) {
+            console.log(`[ALERTE] Suppression - Média détecté de: ${username || 'inconnu'}`);
+            await deleteMessage(postElement);
+            return;
+        }
+    }
+    catch (error) {
+        // Ignorer les erreurs silencieusement
+    }
+}
+/**
+ * Démarre la surveillance des nouveaux messages (comme Tampermonkey).
  */
 async function startMonitoring(page) {
-    // Utiliser page.waitForSelector pour s'assurer que le chat est chargé
-    await page.waitForSelector(config_1.SELECTORS.POST_MESSAGE, { state: 'attached' });
-    // Utiliser page.locator pour surveiller les nouveaux messages
-    const chatContainer = page.locator('dl.posts');
-    // On utilise une boucle infinie pour surveiller l'ajout de nouveaux éléments
-    // Playwright n'a pas d'API native pour MutationObserver, on doit donc sonder ou utiliser une approche plus complexe.
-    // Pour la simplicité et la robustesse sur Render, on va sonder le dernier message.
-    let lastMessageId = null;
+    await page.waitForSelector(config_1.SELECTORS.POST_CONTAINER, { state: 'attached', timeout: 30000 });
+    console.log("[INFO] Surveillance démarrée - Utilisation du sélecteur dl.post");
+    const processedIds = new Set();
     let loopCount = 0;
     while (true) {
         try {
-            // Récupérer tous les messages
-            const allPosts = await page.locator(config_1.SELECTORS.POST_MESSAGE).all();
-            // Log périodique pour debug (toutes les 60 itérations = ~30 secondes)
+            // Récupérer tous les posts (dl.post)
+            const allPosts = await page.locator(config_1.SELECTORS.POST_CONTAINER).all();
             loopCount++;
             if (loopCount % 60 === 0) {
-                console.log(`[DEBUG] Surveillance active - ${allPosts.length} messages détectés`);
+                console.log(`[DEBUG] Surveillance active - ${allPosts.length} posts détectés`);
             }
-            if (allPosts.length > 0) {
-                // On ne vérifie que le dernier message pour éviter de re-traiter tout l'historique
-                const latestPost = allPosts[allPosts.length - 1];
-                const currentMessageId = await latestPost.getAttribute('id');
-                if (currentMessageId && currentMessageId !== lastMessageId) {
-                    // Extraire le pseudo pour le log
-                    try {
-                        const pseudoEl = latestPost.locator(config_1.SELECTORS.POST_NAME);
-                        const pseudo = await pseudoEl.innerText();
-                        console.log(`[DEBUG] Nouveau message de [${pseudo.trim()}] - ID: ${currentMessageId}`);
+            // Scanner tous les posts (comme le fait Tampermonkey avec setInterval)
+            for (const post of allPosts) {
+                try {
+                    // Essayer d'obtenir un identifiant unique pour ce post
+                    const postId = await post.evaluate((el) => {
+                        // Utiliser l'index dans le DOM ou créer un hash du contenu
+                        const text = el.textContent || '';
+                        return `${el.className}_${text.slice(0, 50)}`;
+                    });
+                    // Vérifier si on a déjà traité ce post
+                    if (!processedIds.has(postId)) {
+                        await checkAndDelete(post);
+                        processedIds.add(postId);
+                        // Limiter la taille du set pour éviter les fuites mémoire
+                        if (processedIds.size > 500) {
+                            const iterator = processedIds.values();
+                            for (let i = 0; i < 100; i++) {
+                                const value = iterator.next().value;
+                                if (value)
+                                    processedIds.delete(value);
+                            }
+                        }
                     }
-                    catch (e) { }
-                    await checkAndDelete(latestPost);
-                    lastMessageId = currentMessageId;
+                }
+                catch (e) {
+                    // Ignorer les erreurs individuelles
                 }
             }
         }
         catch (error) {
             console.error("[ERREUR] Erreur de surveillance:", error);
-            // Tenter de recharger la page en cas d'erreur grave (déconnexion, crash)
-            await page.reload();
-            await page.waitForSelector(config_1.SELECTORS.CHAT_LOADED, { timeout: 10000 });
+            try {
+                await page.reload();
+                await page.waitForSelector(config_1.SELECTORS.CHAT_LOADED, { timeout: 10000 });
+            }
+            catch (reloadError) {
+                console.error("[ERREUR] Échec du rechargement:", reloadError);
+            }
         }
-        // Attendre un court instant avant de vérifier à nouveau (sondage)
-        await page.waitForTimeout(500); // Vérification toutes les 500ms
+        // Vérification toutes les 300ms (comme Tampermonkey)
+        await page.waitForTimeout(300);
     }
 }
 /**
- * Démarre un mini-serveur HTTP pour maintenir le service Render actif et gérer l'admin.
+ * Démarre un mini-serveur HTTP pour maintenir le service actif et gérer l'admin.
  */
 function startKeepAliveServer() {
     const app = (0, express_1.default)();
     const port = process.env.PORT || 5000;
-    // Middleware pour le parsing JSON et URL-encoded
     app.use(express_1.default.json());
     app.use(express_1.default.urlencoded({ extended: true }));
-    // Middleware de sécurité pour l'interface admin
     const adminAuth = (req, res, next) => {
         if (req.query.key !== config_1.ADMIN_KEY) {
             return res.status(403).send('Accès refusé. Clé d\'administration invalide.');
         }
         next();
     };
-    // Route Keep-Alive
     app.get('/', (req, res) => {
         res.status(200).send('tlk.io Mod Bot is running and active.');
     });
-    // Routes d'administration (Phase 3)
     app.get('/admin/blocked-users', adminAuth, (req, res) => {
         const html = `
             <!DOCTYPE html>

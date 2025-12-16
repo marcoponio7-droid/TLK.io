@@ -21,20 +21,18 @@ export const TLK_URL: string = "https://tlk.io/grenadine"; // URL du chat dédui
 // Chemin pour sauvegarder et charger les cookies de session.
 export const COOKIE_PATH: string = "session-cookies.json";
 
-// Sélecteurs DOM
+// Sélecteurs DOM (basés sur les scripts Tampermonkey fonctionnels)
 export const SELECTORS = {
-    // Sélecteur pour tous les messages postés
-    POST_MESSAGE: 'dd.post-message',
+    // Sélecteur pour tous les messages postés (conteneur complet)
+    POST_CONTAINER: 'dl.post',
     // Sélecteur pour le nom de l'utilisateur
     POST_NAME: '.post-name',
     // Sélecteur pour le contenu du message
-    POST_CONTENT: '.post-message',
-    // Sélecteur pour le bouton de suppression (TRÈS IMPORTANT)
-    DELETE_BUTTON: 'button#delete-message.post-time-button',
-    // Sélecteur pour le champ de saisie de message (classe, pas ID)
+    POST_CONTENT: 'dd.post-message',
+    // Sélecteur pour le champ de saisie de message
     INPUT_FIELD: '.message-input',
-    // Sélecteur pour le bouton d'envoi (à vérifier)
+    // Sélecteur pour le bouton d'envoi
     SEND_BUTTON: '.button',
-    // Sélecteur pour détecter si le chat est chargé (ex: le champ d'entrée)
+    // Sélecteur pour détecter si le chat est chargé
     CHAT_LOADED: '.message-input'
 };
