@@ -13,6 +13,20 @@ let context: BrowserContext;
 let page: Page;
 
 /**
+ * Helper minimal pour normaliser un pseudo
+ */
+function normalizePseudo(raw: string | null | undefined): string {
+    if (!raw) return '';
+    return raw
+        .normalize('NFKC')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '') // remove zero-width
+        .replace(/\s+/g, ' ')
+        .replace(/[:\u2022\-\u—\u…\t\n\r]+$/g, '') // remove trailing punctuation
+        .trim()
+        .toLowerCase();
+}
+
+/**
  * Charge la liste des pseudos bloqués depuis le fichier JSON.
  */
 async function loadBlockedUsers(): Promise<void> {
@@ -228,41 +242,37 @@ async function deleteMessage(postElement: any): Promise<void> {
  */
 async function checkAndDelete(postElement: any): Promise<void> {
     try {
-        // Le pseudo est dans l'élément <dt> précédent (frère), pas dans le <dd>
-        // On utilise XPath pour aller chercher le dt précédent
+        // Récupération du pseudo (élément précédent <dt>)
         const pseudoElement = postElement.locator('xpath=./preceding-sibling::dt[1]');
         const messageElement = postElement;
 
-        const pseudo = await pseudoElement.innerText();
+        // Récupérer texte brut du pseudo et normaliser
+        const rawPseudoText = await pseudoElement.innerText().catch(() => '');
+        const pseudo = normalizePseudo(rawPseudoText);
         const message = await messageElement.innerText();
         const innerHTML = await messageElement.innerHTML();
-        
-        console.log(`[DEBUG] Vérification message - Pseudo: [${pseudo.trim()}] Message: ${message.substring(0, 50)}...`);
+
+        // Pré-calculer la liste normalisée des pseudos bloqués
+        const blockedNormalized = blockedUsers.map(u => normalizePseudo(u));
 
         let shouldDelete = false;
         let reason = "";
 
-        // 1. Vérification par pseudo
-        const pseudoMinuscule = pseudo.trim().replace(/:$/, '').toLowerCase();
-        const blockedMinuscule = blockedUsers.map(u => u.toLowerCase());
-
-        // 1. Vérification par pseudo
-        if (blockedMinuscule.includes(pseudoMinuscule)) {
+        // Vérification par pseudo (égalité sur la forme normalisée)
+        if (blockedNormalized.includes(pseudo)) {
             shouldDelete = true;
-            reason = `Pseudo interdit: ${pseudo.trim()}`;
+            reason = `Pseudo interdit: ${rawPseudoText}`;
         }
 
-        // 2. Vérification par contenu média (balises)
+        // Vérification par contenu média (balises)
         if (innerHTML.includes('<img') || innerHTML.includes('<video') || innerHTML.includes('<svg')) {
             shouldDelete = true;
             reason = reason || "Contient une balise média (img, video, svg)";
         }
 
-        // 3. Vérification par contenu média (liens directs ou markdown)
-        // On cherche les liens directs (y compris le markdown ![](url))
+        // Vérification par lien direct
         const linkRegex = /(https?:\/\/[^\s]+)/g;
         let match;
-        
         while ((match = linkRegex.exec(message)) !== null) {
             const link = match[0];
             if (MEDIA_REGEX.test(link)) {
@@ -273,12 +283,12 @@ async function checkAndDelete(postElement: any): Promise<void> {
         }
 
         if (shouldDelete) {
-            console.log(`[ALERTE] Suppression de: [${pseudo.trim()}] - Raison: ${reason}`);
+            console.log(`[ALERTE] Suppression de: [${rawPseudoText}] - Raison: ${reason}`);
             await deleteMessage(postElement);
         }
 
     } catch (error) {
-        // Ignorer les erreurs de messages qui disparaissent ou qui sont en cours de chargement
+        // Ignorer les erreurs de messages qui disparaissent ou sont en cours de chargement
         // console.error("[ERREUR] Échec de la vérification du message:", error);
     }
 }
