@@ -1,13 +1,9 @@
 "use strict";
 // src/config.ts
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SELECTORS = exports.COOKIE_PATH = exports.TLK_URL = exports.RULES_INTERVAL_MS = exports.RULES_MESSAGE = exports.MEDIA_REGEX = exports.BLOCKED_USERS = void 0;
-// Liste des pseudos interdits.
-exports.BLOCKED_USERS = [
-    "pp",
-    "userTest",
-    "pseudoInterdit"
-];
+exports.SELECTORS = exports.COOKIE_PATH = exports.TLK_URL = exports.RULES_INTERVAL_MS = exports.RULES_MESSAGE = exports.MEDIA_REGEX = exports.ADMIN_KEY = void 0;
+// Clé d'administration pour l'interface web (à définir dans les variables d'environnement Render)
+exports.ADMIN_KEY = process.env.ADMIN_KEY || "default_admin_key";
 // Regex pour détecter les liens directs vers les fichiers médias.
 // Inclut les extensions demandées : .jpg .jpeg .png .gif .webp .svg .tiff .pdf .ai .eps .psd .mp4
 // Note: La détection des liens d'hébergeurs sera gérée par une logique plus complexe dans le bot.

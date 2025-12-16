@@ -186,7 +186,7 @@ async function checkAndDelete(postElement: any): Promise<void> {
         let reason = "";
 
         // 1. Vérification par pseudo
-        const pseudoMinuscule = pseudo.trim().toLowerCase();
+        const pseudoMinuscule = pseudo.trim().replace(/:$/, '').toLowerCase();
         const blockedMinuscule = blockedUsers.map(u => u.toLowerCase());
 
         // 1. Vérification par pseudo

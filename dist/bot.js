@@ -33,6 +33,9 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.page = exports.context = exports.browser = void 0;
 exports.startBot = startBot;
@@ -41,12 +44,46 @@ exports.loadCookies = loadCookies;
 exports.isSessionValid = isSessionValid;
 exports.startRulesTimer = startRulesTimer;
 exports.startMonitoring = startMonitoring;
+exports.loadBlockedUsers = loadBlockedUsers;
+exports.saveBlockedUsers = saveBlockedUsers;
 const playwright_1 = require("playwright");
+const path = __importStar(require("path"));
+const express_1 = __importDefault(require("express"));
 const fs = __importStar(require("fs/promises"));
 const config_1 = require("./config");
 let browser;
+let blockedUsers = [];
+const BLOCKED_USERS_PATH = path.join(process.cwd(), 'blocked-users.json');
 let context;
 let page;
+/**
+ * Charge la liste des pseudos bloqués depuis le fichier JSON.
+ */
+async function loadBlockedUsers() {
+    try {
+        const data = await fs.readFile(BLOCKED_USERS_PATH, 'utf-8');
+        const json = JSON.parse(data);
+        blockedUsers = json.blocked || [];
+        console.log(`[INFO] ${blockedUsers.length} pseudos bloqués chargés.`);
+    }
+    catch (error) {
+        console.error("[ERREUR] Échec du chargement des pseudos bloqués. Utilisation d'une liste vide.", error);
+        blockedUsers = [];
+    }
+}
+/**
+ * Sauvegarde la liste des pseudos bloqués dans le fichier JSON.
+ */
+async function saveBlockedUsers() {
+    try {
+        const data = JSON.stringify({ blocked: blockedUsers }, null, 2);
+        await fs.writeFile(BLOCKED_USERS_PATH, data);
+        console.log(`[INFO] ${blockedUsers.length} pseudos bloqués sauvegardés.`);
+    }
+    catch (error) {
+        console.error("[ERREUR] Échec de la sauvegarde des pseudos bloqués:", error);
+    }
+}
 /**
  * Sauvegarde les cookies de session dans un fichier JSON.
  * @param context Le contexte du navigateur.
@@ -110,8 +147,10 @@ async function startBot() {
     // 3. On suppose que la session est valide et on attend le chargement complet
     console.log("[INFO] Attente du chargement complet de la page...");
     await page.waitForTimeout(5000); // Attendre 5 secondes pour le chargement du chat
-    // 4. Démarrage de la surveillance et du timer
-    console.log("[SUCCÈS] Démarrage de la surveillance et du timer...");
+    // 4. Démarrage du serveur Keep-Alive, de la surveillance et du timer
+    await loadBlockedUsers(); // Charger la liste des pseudos bloqués
+    console.log("[SUCCÈS] Démarrage du serveur Keep-Alive, de la surveillance et du timer...");
+    startKeepAliveServer();
     await startMonitoring(page);
     startRulesTimer(page);
     // Pour l'instant, on laisse le bot tourner indéfiniment pour simuler le 24/7
@@ -121,11 +160,6 @@ async function startBot() {
     //     process.exit(0);
     // });
 }
-// startBot().catch(error => {
-//     console.error("[ERREUR GLOBALE] Une erreur inattendue s'est produite:", error);
-//     if (browser) browser.close();
-//     process.exit(1);
-// });
 // Fonctions de modération et d'envoi de messages (Phase 3 & 4)
 /**
  * Envoie le message des règles dans le chat.
@@ -159,8 +193,8 @@ async function deleteMessage(postElement) {
     try {
         // 1. Simuler le survol pour faire apparaître le bouton
         await postElement.hover();
-        // 2. Cliquer sur le bouton de suppression
-        const deleteButton = postElement.locator(config_1.SELECTORS.DELETE_BUTTON);
+        // 2. Cliquer sur le bouton de suppression (le deuxième bouton est le bouton "Delete" pour les modérateurs)
+        const deleteButton = postElement.locator('button:nth-child(2)');
         await deleteButton.click({ timeout: 5000 }); // Temps d'attente court pour le clic
         console.log("[SUPPRESSION] Message supprimé avec succès.");
     }
@@ -182,7 +216,10 @@ async function checkAndDelete(postElement) {
         let shouldDelete = false;
         let reason = "";
         // 1. Vérification par pseudo
-        if (config_1.BLOCKED_USERS.includes(pseudo.trim())) {
+        const pseudoMinuscule = pseudo.trim().replace(/:$/, '').toLowerCase();
+        const blockedMinuscule = blockedUsers.map(u => u.toLowerCase());
+        // 1. Vérification par pseudo
+        if (blockedMinuscule.includes(pseudoMinuscule)) {
             shouldDelete = true;
             reason = `Pseudo interdit: ${pseudo.trim()}`;
         }
@@ -193,8 +230,10 @@ async function checkAndDelete(postElement) {
         }
         // 3. Vérification par contenu média (liens directs ou markdown)
         // On cherche les liens directs (y compris le markdown ![](url))
-        const links = message.match(/(https?:\/\/[^\s]+)/g) || [];
-        for (const link of links) {
+        const linkRegex = /(https?:\/\/[^\s]+)/g;
+        let match;
+        while ((match = linkRegex.exec(message)) !== null) {
+            const link = match[0];
             if (config_1.MEDIA_REGEX.test(link)) {
                 shouldDelete = true;
                 reason = reason || `Lien média direct détecté: ${link}`;
@@ -247,4 +286,100 @@ async function startMonitoring(page) {
         // Attendre un court instant avant de vérifier à nouveau (sondage)
         await page.waitForTimeout(500); // Vérification toutes les 500ms
     }
+}
+/**
+ * Démarre un mini-serveur HTTP pour maintenir le service Render actif et gérer l'admin.
+ */
+function startKeepAliveServer() {
+    const app = (0, express_1.default)();
+    const port = process.env.PORT || 3000;
+    // Middleware pour le parsing JSON et URL-encoded
+    app.use(express_1.default.json());
+    app.use(express_1.default.urlencoded({ extended: true }));
+    // Middleware de sécurité pour l'interface admin
+    const adminAuth = (req, res, next) => {
+        if (req.query.key !== config_1.ADMIN_KEY) {
+            return res.status(403).send('Accès refusé. Clé d\'administration invalide.');
+        }
+        next();
+    };
+    // Route Keep-Alive
+    app.get('/', (req, res) => {
+        res.status(200).send('tlk.io Mod Bot is running and active.');
+    });
+    // Routes d'administration (Phase 3)
+    app.get('/admin/blocked-users', adminAuth, (req, res) => {
+        const html = `
+            <!DOCTYPE html>
+            <html lang="fr">
+            <head>
+                <meta charset="UTF-8">
+                <title>Admin Pseudos Bloqués</title>
+                <style>
+                    body { font-family: sans-serif; margin: 20px; }
+                    .container { max-width: 600px; margin: auto; }
+                    h1 { border-bottom: 2px solid #ccc; padding-bottom: 10px; }
+                    ul { list-style: none; padding: 0; }
+                    li { margin-bottom: 10px; padding: 8px; border: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+                    form { margin-top: 20px; padding: 15px; border: 1px solid #ccc; }
+                    input[type="text"] { padding: 8px; width: 70%; }
+                    button { padding: 8px 15px; cursor: pointer; }
+                    .remove-btn { background-color: #f44336; color: white; border: none; }
+                    .add-btn { background-color: #4CAF50; color: white; border: none; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>Gestion des Pseudos Bloqués</h1>
+                    <p>Accès sécurisé par clé d'administration.</p>
+                    
+                    <h2>Liste Actuelle (${blockedUsers.length})</h2>
+                    <ul>
+                        ${blockedUsers.map(pseudo => `
+                            <li>
+                                <span>${pseudo}</span>
+                                <form method="POST" action="/admin/blocked-users/remove?key=${config_1.ADMIN_KEY}">
+                                    <input type="hidden" name="pseudo" value="${pseudo}">
+                                    <button type="submit" class="remove-btn">Supprimer</button>
+                                </form>
+                            </li>
+                        `).join('')}
+                    </ul>
+
+                    <h2>Ajouter un Pseudo</h2>
+                    <form method="POST" action="/admin/blocked-users/add?key=${config_1.ADMIN_KEY}">
+                        <input type="text" name="pseudo" placeholder="Nouveau pseudo à bloquer" required>
+                        <button type="submit" class="add-btn">Ajouter</button>
+                    </form>
+                </div>
+            </body>
+            </html>
+        `;
+        res.send(html);
+    });
+    app.post('/admin/blocked-users/add', adminAuth, async (req, res) => {
+        const pseudo = req.body.pseudo ? req.body.pseudo.trim() : null;
+        if (pseudo && !blockedUsers.includes(pseudo)) {
+            blockedUsers.push(pseudo);
+            await saveBlockedUsers();
+            await loadBlockedUsers();
+            console.log(`[ADMIN] Pseudo ajouté: ${pseudo}`);
+        }
+        res.redirect(`/admin/blocked-users?key=${config_1.ADMIN_KEY}`);
+    });
+    app.post('/admin/blocked-users/remove', adminAuth, async (req, res) => {
+        const pseudo = req.body.pseudo ? req.body.pseudo.trim() : null;
+        const initialLength = blockedUsers.length;
+        blockedUsers = blockedUsers.filter(u => u !== pseudo);
+        if (blockedUsers.length < initialLength) {
+            await saveBlockedUsers();
+            await loadBlockedUsers();
+            console.log(`[ADMIN] Pseudo supprimé: ${pseudo}`);
+        }
+        res.redirect(`/admin/blocked-users?key=${config_1.ADMIN_KEY}`);
+    });
+    app.listen(port, () => {
+        console.log(`[INFO] Keep-Alive Server started on port ${port}`);
+        console.log(`[INFO] Admin accessible via /admin/blocked-users?key=${config_1.ADMIN_KEY}`);
+    });
 }
