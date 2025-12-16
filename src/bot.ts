@@ -162,37 +162,39 @@ function startRulesTimer(page: Page): void {
 }
 
 /**
- * Supprime un message (comme le script Tampermonkey pour les médias).
+ * Supprime un message (exactement comme le script Tampermonkey).
  */
 async function deleteMessage(postElement: Locator): Promise<void> {
     try {
-        // 1. Trouver le dernier message non-supprimé (dd.post-message sans la classe "deleted")
-        const hoverZone = postElement.locator('dd.post-message:not(.deleted)').last();
-        if (await hoverZone.count() === 0) {
-            // Tous les messages de ce post sont déjà supprimés
-            return;
-        }
+        // Utiliser evaluate pour exécuter le code exactement comme Tampermonkey
+        await postElement.evaluate((post) => {
+            function hover(el: Element) {
+                el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+                el.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+            }
 
-        // 2. Hover sur la zone pour faire apparaître les boutons
-        await hoverZone.hover();
-        await page.waitForTimeout(150);
+            function click(el: Element) {
+                el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+                el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+                el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            }
 
-        // 3. Chercher le bouton delete spécifiquement
-        const deleteBtn = postElement.locator('button#delete-message.post-time-button');
-        if (await deleteBtn.count() > 0) {
-            await deleteBtn.click({ force: true });
-            console.log("[SUPPRESSION] Message supprimé avec succès.");
-            return;
-        }
+            const hoverZone = post.querySelector("dd.post-message");
+            if (!hoverZone) return;
 
-        // 4. Alternative: chercher tous les boutons et prendre le 2ème
-        const buttons = postElement.locator('button');
-        const count = await buttons.count();
-        if (count >= 2) {
-            await buttons.nth(1).click({ force: true });
-            console.log("[SUPPRESSION] Message supprimé (2ème bouton).");
-            return;
-        }
+            hover(hoverZone);
+
+            setTimeout(() => {
+                const deleteBtn = post.querySelector("button#delete-message.post-time-button");
+                if (deleteBtn) {
+                    click(deleteBtn);
+                }
+            }, 120);
+        });
+        
+        // Attendre que la suppression soit effectuée
+        await page.waitForTimeout(200);
+        console.log("[SUPPRESSION] Message supprimé avec succès.");
     } catch (error) {
         // Ignorer silencieusement les erreurs (post déjà supprimé ou disparu)
     }

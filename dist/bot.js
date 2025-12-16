@@ -196,34 +196,35 @@ function startRulesTimer(page) {
     console.log(`[INFO] Timer des règles démarré. Envoi toutes les ${config_1.RULES_INTERVAL_MS / 1000 / 60} minutes.`);
 }
 /**
- * Supprime un message (comme le script Tampermonkey pour les médias).
+ * Supprime un message (exactement comme le script Tampermonkey).
  */
 async function deleteMessage(postElement) {
     try {
-        // 1. Trouver le dernier message non-supprimé (dd.post-message sans la classe "deleted")
-        const hoverZone = postElement.locator('dd.post-message:not(.deleted)').last();
-        if (await hoverZone.count() === 0) {
-            // Tous les messages de ce post sont déjà supprimés
-            return;
-        }
-        // 2. Hover sur la zone pour faire apparaître les boutons
-        await hoverZone.hover();
-        await page.waitForTimeout(150);
-        // 3. Chercher le bouton delete spécifiquement
-        const deleteBtn = postElement.locator('button#delete-message.post-time-button');
-        if (await deleteBtn.count() > 0) {
-            await deleteBtn.click({ force: true });
-            console.log("[SUPPRESSION] Message supprimé avec succès.");
-            return;
-        }
-        // 4. Alternative: chercher tous les boutons et prendre le 2ème
-        const buttons = postElement.locator('button');
-        const count = await buttons.count();
-        if (count >= 2) {
-            await buttons.nth(1).click({ force: true });
-            console.log("[SUPPRESSION] Message supprimé (2ème bouton).");
-            return;
-        }
+        // Utiliser evaluate pour exécuter le code exactement comme Tampermonkey
+        await postElement.evaluate((post) => {
+            function hover(el) {
+                el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+                el.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+            }
+            function click(el) {
+                el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+                el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+                el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            }
+            const hoverZone = post.querySelector("dd.post-message");
+            if (!hoverZone)
+                return;
+            hover(hoverZone);
+            setTimeout(() => {
+                const deleteBtn = post.querySelector("button#delete-message.post-time-button");
+                if (deleteBtn) {
+                    click(deleteBtn);
+                }
+            }, 120);
+        });
+        // Attendre que la suppression soit effectuée
+        await page.waitForTimeout(200);
+        console.log("[SUPPRESSION] Message supprimé avec succès.");
     }
     catch (error) {
         // Ignorer silencieusement les erreurs (post déjà supprimé ou disparu)
