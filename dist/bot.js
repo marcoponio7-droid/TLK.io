@@ -255,11 +255,14 @@ async function deleteMessage(postElement) {
  */
 async function checkAndDelete(postElement) {
     try {
-        const pseudoElement = postElement.locator(config_1.SELECTORS.POST_NAME);
-        const messageElement = postElement.locator(config_1.SELECTORS.POST_CONTENT);
+        // Le pseudo est dans l'élément <dt> précédent (frère), pas dans le <dd>
+        // On utilise XPath pour aller chercher le dt précédent
+        const pseudoElement = postElement.locator('xpath=./preceding-sibling::dt[1]');
+        const messageElement = postElement;
         const pseudo = await pseudoElement.innerText();
         const message = await messageElement.innerText();
         const innerHTML = await messageElement.innerHTML();
+        console.log(`[DEBUG] Vérification message - Pseudo: [${pseudo.trim()}] Message: ${message.substring(0, 50)}...`);
         let shouldDelete = false;
         let reason = "";
         // 1. Vérification par pseudo
