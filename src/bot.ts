@@ -346,6 +346,7 @@ function startKeepAliveServer(): void {
         if (pseudo && !blockedUsers.includes(pseudo)) {
             blockedUsers.push(pseudo);
             await saveBlockedUsers();
+            await loadBlockedUsers();
             console.log(`[ADMIN] Pseudo ajouté: ${pseudo}`);
         }
         res.redirect(`/admin/blocked-users?key=${ADMIN_KEY}`);
@@ -357,6 +358,7 @@ function startKeepAliveServer(): void {
         blockedUsers = blockedUsers.filter(u => u !== pseudo);
         if (blockedUsers.length < initialLength) {
             await saveBlockedUsers();
+            await loadBlockedUsers();
             console.log(`[ADMIN] Pseudo supprimé: ${pseudo}`);
         }
         res.redirect(`/admin/blocked-users?key=${ADMIN_KEY}`);
