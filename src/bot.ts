@@ -372,6 +372,11 @@ async function startMonitoring(page: Page): Promise<void> {
             }
         } catch (error) {
             console.error("[ERREUR] Erreur de surveillance:", error);
+            // Si la page est fermée, nous sortons de la boucle pour laisser startBot relancer le processus
+            if (error.message && error.message.includes('Target page, context or browser has been closed')) {
+                console.log("[AVERTISSEMENT] Page fermée. Arrêt de la surveillance.");
+                break; // Sortir de la boucle while(true)
+            }
             try {
                 await page.reload();
                 await page.waitForSelector(SELECTORS.CHAT_LOADED, { timeout: 10000 });
@@ -381,7 +386,12 @@ async function startMonitoring(page: Page): Promise<void> {
         }
         
         // Attendre un court instant avant la prochaine itération
-        await page.waitForTimeout(300);
+        try {
+            await page.waitForTimeout(300);
+        } catch (e) {
+            // Ignorer si la page est fermée ici aussi
+            break;
+        }
     }
 }
 
