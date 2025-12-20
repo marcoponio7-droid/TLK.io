@@ -299,6 +299,9 @@ async function startMonitoring(page: Page): Promise<void> {
 
     while (true) {
         try {
+            // LOG DE DÉBOGAGE POUR CONFIRMER QUE LA BOUCLE TOURNE
+            console.log("[DEBUG] Boucle de surveillance active.");
+            
             const allPosts = await page.locator(SELECTORS.POST_CONTAINER).all();
             
             // Nettoyer les anciennes entrées du cooldown
