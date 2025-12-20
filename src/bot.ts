@@ -4,11 +4,20 @@ import { chromium, Browser, BrowserContext, Page, Locator } from 'playwright';
 import * as path from 'path';
 import express from 'express';
 import * as fs from 'fs/promises';
-import { COOKIE_PATH, TLK_URL, SELECTORS, MEDIA_REGEX, RULES_MESSAGE, RULES_INTERVAL_MS, ADMIN_KEY } from './config';
+import { COOKIE_PATH, TLK_URL, SELECTORS, MEDIA_REGEX, RULES_MESSAGE, RULES_INTERVAL_MS, ADMIN_KEY, LOG_PATH } from './config';
+
+interface MessageLogEntry {
+    id: string;
+    timestamp: number;
+    username: string;
+    content: string;
+}
 
 let browser: Browser;
 let blockedUsers: string[] = [];
 const BLOCKED_USERS_PATH = path.join(process.cwd(), 'blocked-users.json');
+let messageLog: MessageLogEntry[] = [];
+const MESSAGE_LOG_PATH = path.join(process.cwd(), LOG_PATH);
 let context: BrowserContext;
 let page: Page;
 
@@ -37,6 +46,49 @@ async function saveBlockedUsers(): Promise<void> {
         console.log(`[INFO] ${blockedUsers.length} pseudos bloqués sauvegardés.`);
     } catch (error) {
         console.error("[ERREUR] Échec de la sauvegarde des pseudos bloqués:", error);
+    }
+}
+
+/**
+ * Charge le journal des messages depuis le fichier JSON.
+ */
+async function loadMessageLog(): Promise<void> {
+    try {
+        const data = await fs.readFile(MESSAGE_LOG_PATH, 'utf-8');
+        const json = JSON.parse(data);
+        messageLog = json.messages || [];
+        console.log(`[INFO] ${messageLog.length} messages chargés depuis le journal.`);
+    } catch (error) {
+        console.log("[INFO] Pas de journal de messages existant ou erreur de chargement. Démarrage avec un journal vide.");
+        messageLog = [];
+    }
+}
+
+/**
+ * Sauvegarde le journal des messages dans le fichier JSON.
+ */
+async function saveMessageLog(): Promise<void> {
+    try {
+        const data = JSON.stringify({ messages: messageLog }, null, 2);
+        await fs.writeFile(MESSAGE_LOG_PATH, data);
+    } catch (error) {
+        console.error("[ERREUR] Échec de la sauvegarde du journal des messages:", error);
+    }
+}
+
+/**
+ * Ajoute un message au journal et le sauvegarde immédiatement.
+ */
+async function logMessage(entry: MessageLogEntry): Promise<void> {
+    // Vérifier si le message est déjà dans le journal pour éviter les doublons
+    if (!messageLog.some(msg => msg.id === entry.id)) {
+        messageLog.push(entry);
+        // Limiter la taille du journal en mémoire pour éviter la saturation
+        if (messageLog.length > 5000) {
+            messageLog = messageLog.slice(messageLog.length - 5000);
+        }
+        await saveMessageLog();
+        console.log(`[LOG] Message enregistré: ${entry.username} (${entry.id})`);
     }
 }
 
@@ -100,42 +152,6 @@ async function isSessionValid(page: Page): Promise<boolean> {
         console.log("[AVERTISSEMENT] Session invalide ou déconnectée.");
         return false;
     }
-}
-
-/**
- * Fonction principale pour démarrer le bot.
- */
-async function startBot() {
-    console.log("[DÉMARRAGE] Lancement du bot de modération tlk.io...");
-
-    browser = await chromium.launch({ 
-        headless: true,
-        executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
-    });
-    context = await browser.newContext();
-
-    await loadCookies(context);
-
-    page = await context.newPage();
-    await page.goto(TLK_URL, { waitUntil: 'domcontentloaded' });
-
-    console.log("[INFO] Attente du chargement complet de la page...");
-    await page.waitForTimeout(5000);
-    
-    console.log(`[DEBUG] URL actuelle: ${page.url()}`);
-    console.log(`[DEBUG] Titre de la page: ${await page.title()}`);
-    
-    const isLoaded = await page.locator(SELECTORS.CHAT_LOADED).count();
-    console.log(`[DEBUG] Champ de message trouvé: ${isLoaded > 0 ? 'OUI' : 'NON'}`);
-    
-    await page.screenshot({ path: 'debug-screenshot.png' });
-    console.log(`[DEBUG] Capture d'écran sauvegardée: debug-screenshot.png`);
-
-    await loadBlockedUsers();
-    console.log("[SUCCÈS] Démarrage du serveur Keep-Alive, de la surveillance et du timer...");
-    startKeepAliveServer();
-    await startMonitoring(page);
-    startRulesTimer(page);
 }
 
 /**
@@ -209,7 +225,7 @@ async function deleteBlockedUserPost(postElement: Locator): Promise<void> {
             // Forcer l'apparition des boutons
             post.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
 
-            // Cherche le bouton Delete = 2e bouton
+            // Cherche le bouton Delete = 2ème bouton
             const buttons = post.querySelectorAll("button");
             if (buttons.length >= 2) {
                 buttons[1].click();
@@ -271,52 +287,24 @@ async function isBlockedUser(postElement: Locator): Promise<{ blocked: boolean; 
 }
 
 /**
- * Vérifie et supprime un post si nécessaire.
- */
-async function checkAndDelete(postElement: Locator): Promise<void> {
-    try {
-        // Vérifier si c'est un utilisateur bloqué
-        const { blocked, username } = await isBlockedUser(postElement);
-        if (blocked) {
-            console.log(`[ALERTE] Suppression - Pseudo bloqué: ${username}`);
-            await deleteBlockedUserPost(postElement);
-            return;
-        }
-
-        // Vérifier si le post contient un média
-        if (await postHasMedia(postElement)) {
-            console.log(`[ALERTE] Suppression - Média détecté de: ${username || 'inconnu'}`);
-            await deleteMediaPost(postElement);
-            return;
-        }
-    } catch (error) {
-        // Ignorer les erreurs silencieusement
-    }
-}
-
-/**
- * Démarre la surveillance des messages (exactement comme Tampermonkey).
+ * Démarre la surveillance des messages (exactement comme Tampermonkey) et intègre la journalisation.
  */
 async function startMonitoring(page: Page): Promise<void> {
     await page.waitForSelector(SELECTORS.POST_CONTAINER, { state: 'attached', timeout: 30000 });
     console.log("[INFO] Surveillance démarrée - Utilisation du sélecteur dl.post");
 
-    let loopCount = 0;
     const recentlyDeleted = new Map<string, number>(); // timestamp -> Date.now()
     const COOLDOWN_MS = 5000; // 5 secondes de cooldown après suppression
+    const loggedPostIds = new Set(messageLog.map(msg => msg.id)); // IDs des messages déjà loggés
 
     while (true) {
         try {
             const allPosts = await page.locator(SELECTORS.POST_CONTAINER).all();
             
-            loopCount++;
-            if (loopCount % 100 === 0) {
-                console.log(`[DEBUG] Surveillance active - ${allPosts.length} posts`);
-                // Nettoyer les anciennes entrées du cooldown
-                const now = Date.now();
-                for (const [key, time] of recentlyDeleted.entries()) {
-                    if (now - time > COOLDOWN_MS * 2) recentlyDeleted.delete(key);
-                }
+            // Nettoyer les anciennes entrées du cooldown
+            const now = Date.now();
+            for (const [key, time] of recentlyDeleted.entries()) {
+                if (now - time > COOLDOWN_MS * 2) recentlyDeleted.delete(key);
             }
 
             for (const post of allPosts) {
@@ -328,8 +316,30 @@ async function startMonitoring(page: Page): Promise<void> {
                     });
                     
                     if (!postId) continue; // Pas de message actif
+
+                    // 1. JOURNALISATION (NOUVELLE FONCTIONNALITÉ)
+                    if (!loggedPostIds.has(postId)) {
+                        const usernameEl = post.locator(SELECTORS.POST_NAME);
+                        const contentEl = post.locator(SELECTORS.POST_CONTENT);
+                        
+                        const username = await usernameEl.innerText();
+                        const content = await contentEl.innerText();
+                        const timestamp = parseInt(postId, 10);
+
+                        const logEntry: MessageLogEntry = {
+                            id: postId,
+                            timestamp: timestamp,
+                            username: username.trim(),
+                            content: content.trim()
+                        };
+
+                        await logMessage(logEntry);
+                        loggedPostIds.add(postId);
+                    }
                     
-                    // Vérifier le cooldown
+                    // 2. MODÉRATION (FONCTIONNALITÉ EXISTANTE)
+                    
+                    // Vérifier le cooldown (pour les posts qui viennent d'être supprimés)
                     const lastDeleted = recentlyDeleted.get(postId);
                     if (lastDeleted && Date.now() - lastDeleted < COOLDOWN_MS) continue;
 
@@ -367,6 +377,7 @@ async function startMonitoring(page: Page): Promise<void> {
             }
         }
         
+        // Attendre un court instant avant la prochaine itération
         await page.waitForTimeout(300);
     }
 }
@@ -475,4 +486,41 @@ function startKeepAliveServer(): void {
     });
 }
 
-export { startBot, saveCookies, loadCookies, isSessionValid, browser, context, page, startRulesTimer, startMonitoring, loadBlockedUsers, saveBlockedUsers };
+/**
+ * Fonction principale pour démarrer le bot.
+ */
+async function startBot() {
+    console.log("[DÉMARRAGE] Lancement du bot de modération tlk.io...");
+
+    browser = await chromium.launch({ 
+        headless: true,
+        executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
+    });
+    context = await browser.newContext();
+
+    await loadCookies(context);
+    await loadMessageLog(); // Charger le journal des messages au démarrage
+
+    page = await context.newPage();
+    await page.goto(TLK_URL, { waitUntil: 'domcontentloaded' });
+
+    console.log("[INFO] Attente du chargement complet de la page...");
+    await page.waitForTimeout(5000);
+    
+    console.log(`[DEBUG] URL actuelle: ${page.url()}`);
+    console.log(`[DEBUG] Titre de la page: ${await page.title()}`);
+    
+    const isLoaded = await page.locator(SELECTORS.CHAT_LOADED).count();
+    console.log(`[DEBUG] Champ de message trouvé: ${isLoaded > 0 ? 'OUI' : 'NON'}`);
+    
+    await page.screenshot({ path: 'debug-screenshot.png' });
+    console.log(`[DEBUG] Capture d'écran sauvegardée: debug-screenshot.png`);
+
+    await loadBlockedUsers();
+    console.log("[SUCCÈS] Démarrage du serveur Keep-Alive, de la surveillance et du timer...");
+    startKeepAliveServer();
+    await startMonitoring(page);
+    startRulesTimer(page);
+}
+
+export { startBot, saveCookies, loadCookies, isSessionValid, browser, context, page, startRulesTimer, startMonitoring, loadBlockedUsers, saveBlockedUsers, loadMessageLog, saveMessageLog };

@@ -21,6 +21,9 @@ export const TLK_URL: string = "https://tlk.io/grenadine"; // URL du chat dédui
 // Chemin pour sauvegarder et charger les cookies de session.
 export const COOKIE_PATH: string = "session-cookies.json";
 
+// Chemin pour sauvegarder le journal des messages.
+export const LOG_PATH: string = "message-log.json";
+
 // Sélecteurs DOM (basés sur les scripts Tampermonkey fonctionnels)
 export const SELECTORS = {
     // Sélecteur pour tous les messages postés (conteneur complet)
