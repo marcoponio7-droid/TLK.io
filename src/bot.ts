@@ -130,7 +130,7 @@ async function loadCookies(context: BrowserContext): Promise<void> {
                 secure: c.secure || false,
                 sameSite: sameSite
             };
-        });
+        } );
         console.log(`[DEBUG] Cookies à charger: ${cookies.length}`);
         await context.addCookies(cookies);
         console.log(`[INFO] Cookies chargés depuis ${COOKIE_PATH}`);
@@ -403,6 +403,16 @@ function startKeepAliveServer(): void {
         res.status(200).send('tlk.io Mod Bot is running and active.');
     });
 
+    // NOUVEAU : Point d'accès pour télécharger le journal des messages
+    app.get('/admin/download-log', adminAuth, (req, res) => {
+        res.download(MESSAGE_LOG_PATH, 'message-log.json', (err) => {
+            if (err) {
+                console.error("[ERREUR] Échec du téléchargement du journal:", err);
+                res.status(500).send("Erreur lors du téléchargement du fichier journal.");
+            }
+        });
+    });
+
     app.get('/admin/blocked-users', adminAuth, (req, res) => {
         const html = `
             <!DOCTYPE html>
@@ -421,6 +431,7 @@ function startKeepAliveServer(): void {
                     button { padding: 8px 15px; cursor: pointer; }
                     .remove-btn { background-color: #f44336; color: white; border: none; }
                     .add-btn { background-color: #4CAF50; color: white; border: none; }
+                    .log-link { margin-top: 20px; padding: 10px; background-color: #f0f0f0; border: 1px solid #ccc; display: block; text-align: center; text-decoration: none; color: #333; }
                 </style>
             </head>
             <body>
@@ -428,6 +439,8 @@ function startKeepAliveServer(): void {
                     <h1>Gestion des Pseudos Bloqués</h1>
                     <p>Accès sécurisé par clé d'administration.</p>
                     
+                    <a href="/admin/download-log?key=${ADMIN_KEY}" class="log-link">Télécharger le Journal des Messages (message-log.json)</a>
+
                     <h2>Liste Actuelle (${blockedUsers.length})</h2>
                     <ul>
                         ${blockedUsers.map(pseudo => `
